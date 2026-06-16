@@ -15,7 +15,6 @@ import { display } from '@kit.ArkUI';
 import { HandDetector, Hand } from '../services/HandDetector';
 import { GazeDetector } from '../services/GazeDetector';
 import { SpeechService } from '../services/SpeechService';
-import { TranslateService } from '../services/TranslateService';
 import { VoiceButton } from '../components/VoiceButton';
 
 @Entry
@@ -26,18 +25,14 @@ struct Index {
   @State touchHand: 'left' | 'right' | '' = ''; // 触摸落点兜底
   @State lookingAtTop: boolean = false;     // 是否处于“注视/激活搜索”状态
   @State recording: boolean = false;
-  @State zone: string = 'record';           // 录音中的选区：record / cancel / send
   @State gazeNative: boolean = false;
   @State motionStatus: string = '初始化...';  // motion 诊断文本
   // 按钮所在侧（真正的 @State，供 UI 直接读，避免 getter 不触发重渲）
   @State buttonSide: 'left' | 'right' = 'right';
-  @State translating: boolean = false;      // 翻译进行中
 
   private handDetector = new HandDetector();
   private gazeDetector = new GazeDetector();
   private speech = new SpeechService();
-  private translator = new TranslateService();
-  private pendingTranslate: boolean = false; // 本次松手是否要翻译
   private collapseTimer: number = -1;
   private halfWidthPx: number = 540;        // 屏幕半宽(px)，用于触摸落点判定左右
 
@@ -119,67 +114,40 @@ struct Index {
     }, 6000);
   }
 
+  // 单击切换：未录音 -> 开始；录音中 -> 结束
+  private toggleVoice(): void {
+    if (this.recording) {
+      this.stopVoice();
+    } else {
+      this.startVoice();
+    }
+  }
+
   private startVoice(): void {
     this.recording = true;
-    this.zone = 'record';
     this.gazeDetector.manualSetLooking(true); // 录音时展开输入框，便于看到实时转写文本
     if (this.collapseTimer !== -1) {
       clearTimeout(this.collapseTimer);
     }
-    this.pendingTranslate = false;
     this.speech.start({
-      onText: (text: string, isLast: boolean) => {
+      onText: (text: string, _isLast: boolean) => {
         this.inputText = text;
-        if (isLast && this.pendingTranslate) {
-          this.pendingTranslate = false;
-          this.doTranslate(text);
-        }
       },
       onComplete: () => {
         this.recording = false;
-        // 兜底：若 onResult 未带 isLast，但本次需要翻译，则在完成时翻译当前文本
-        if (this.pendingTranslate) {
-          this.pendingTranslate = false;
-          this.doTranslate(this.inputText);
-        }
+        this.resetCollapseTimer();
       },
       onError: (code: number, message: string) => {
         this.recording = false;
-        this.pendingTranslate = false;
         console.error(`[Index] 语音识别错误 ${code}: ${message}`);
       }
     });
   }
 
-  /**
-   * 松手结束。zone:
-   *   'cancel'    -> 撤回，删除转写
-   *   'record'    -> 普通转写（保留原文）
-   *   'translate' -> 先转写、拿到最终文本后翻译（中译英）再回填
-   */
-  private endVoice(zone: string): void {
-    if (zone === 'cancel') {
-      this.speech.cancel();
-      this.inputText = '';
-      this.pendingTranslate = false;
-    } else {
-      this.pendingTranslate = (zone === 'translate');
-      this.speech.finish();
-    }
+  private stopVoice(): void {
+    this.speech.finish();
     this.recording = false;
-    this.zone = 'record';
     this.resetCollapseTimer();
-  }
-
-  // 翻译最终文本（中译英），过程中显示“翻译中…”
-  private async doTranslate(text: string): Promise<void> {
-    if (text.trim().length === 0) {
-      return;
-    }
-    this.translating = true;
-    const out = await this.translator.translate(text, 'zh-CN|en');
-    this.translating = false;
-    this.inputText = out;
   }
 
   // 页面级触摸：记录落点在左/右半屏，作为握持侧兜底
@@ -220,9 +188,9 @@ struct Index {
             }
 
             if (this.lookingAtTop) {
-              Text(this.translating ? '翻译中…' : (this.inputText.length > 0 ? this.inputText : '搜索片名、演员或剧情'))
+              Text(this.inputText.length > 0 ? this.inputText : '搜索片名、演员或剧情')
                 .fontSize(15)
-                .fontColor(this.inputText.length > 0 || this.translating ? '#222222' : '#999999')
+                .fontColor(this.inputText.length > 0 ? '#222222' : '#999999')
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
                 .layoutWeight(1)
@@ -327,10 +295,7 @@ struct Index {
         Column() {
           VoiceButton({
             recording: this.recording,
-            zone: this.zone,
-            onStart: () => this.startVoice(),
-            onMove: (z: string) => { this.zone = z; },
-            onEnd: (z: string) => this.endVoice(z)
+            onToggle: () => this.toggleVoice()
           })
         }
         .width('100%')

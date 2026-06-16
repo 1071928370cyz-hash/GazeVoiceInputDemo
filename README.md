@@ -9,14 +9,13 @@
 | --- | --- | --- |
 | 握持手（智感握姿） | `@kit.MultimodalAwarenessKit` · `motion.on('holdingHandChanged')` | ✅ 原生，权限 `ohos.permission.DETECT_GESTURE`，需 HarmonyOS 6.0.0.115+ |
 | 语音录入 + 实时转写 | Core Speech Kit · `speechRecognizer` | ✅ 原生，权限 `ohos.permission.MICROPHONE` |
-| 文本翻译（中译英） | 公共接口 MyMemory（鸿蒙无原生翻译 API）| ✅ 免密钥，权限 `ohos.permission.INTERNET`，见 `TranslateService.ets`，可一键换百度/有道 |
 | 注视（看屏幕上方输入框） | Multimodal Awareness Kit 注视能力 | ⚠️ 原生注视接口未核实，当前用「点击搜索框＝注视」手动兜底，见 `GazeDetector.ets` |
 
 ## 交互流程
 
 1. 点击/注视顶部"搜索"图标 → 拉起只读输入框 + 语音按钮（**不弹软键盘**）
 2. 语音按钮出现在握持手一侧：`holdingHandChanged` 判定优先，拿不到则用"最近触摸落在左/右半屏"兜底，再不行默认右手
-3. 长按语音按钮开始转写；**上滑到"取消输入"撤回，下滑到"翻译"先转写再中译英**，中间不拖=普通转写
+3. **单击语音按钮开始转写，再单击结束**（Typeless 风格）；录音中按钮显示声波动效，文本实时回填
 4. 松手回到单个按钮；一段时间未注视 → 输入框与按钮收起
 
 ## 关键源码
@@ -24,7 +23,7 @@
 ```
 entry/src/main/ets/
 ├── pages/Index.ets            # 仿华为视频搜索页 + 三路感知编排
-├── components/VoiceButton.ets # 握持手侧"长按说话"按钮（上滑取消/下滑发送）
+├── components/VoiceButton.ets # 握持手侧语音按钮（单击切换 + 声波动效）
 └── services/
     ├── HandDetector.ets       # 握持手检测（holdingHandChanged）
     ├── GazeDetector.ets       # 注视检测（原生占位 + 手动兜底）
