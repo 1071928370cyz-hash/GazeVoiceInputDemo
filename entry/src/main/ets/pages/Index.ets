@@ -28,6 +28,8 @@ struct Index {
   @State zone: string = 'record';           // 录音中的选区：record / cancel / send
   @State gazeNative: boolean = false;
   @State motionStatus: string = '初始化...';  // motion 诊断文本
+  // 按钮所在侧（真正的 @State，供 UI 直接读，避免 getter 不触发重渲）
+  @State buttonSide: 'left' | 'right' = 'right';
 
   private handDetector = new HandDetector();
   private gazeDetector = new GazeDetector();
@@ -35,15 +37,19 @@ struct Index {
   private collapseTimer: number = -1;
   private halfWidthPx: number = 540;        // 屏幕半宽(px)，用于触摸落点判定左右
 
-  // 实际采用的握持侧：motion 优先 -> 触摸兜底 -> 默认右手
-  private get effHand(): 'left' | 'right' {
+  // 重新计算按钮侧：motion 优先 -> 触摸兜底 -> 默认右手。每次相关来源变化都要调一次。
+  private updateSide(): void {
+    let side: 'left' | 'right';
     if (this.motionHand === 'left' || this.motionHand === 'right') {
-      return this.motionHand;
+      side = this.motionHand;
+    } else if (this.touchHand !== '') {
+      side = this.touchHand;
+    } else {
+      side = 'right';
     }
-    if (this.touchHand !== '') {
-      return this.touchHand;
+    if (side !== this.buttonSide) {
+      this.buttonSide = side;
     }
-    return 'right';
   }
 
   async aboutToAppear(): Promise<void> {
@@ -58,6 +64,7 @@ struct Index {
 
     this.handDetector.start((h: Hand) => {
       this.motionHand = h;
+      this.updateSide();
     }, (text: string) => {
       this.motionStatus = text;
     });
@@ -147,6 +154,7 @@ struct Index {
     const t = event.touches[0];
     if (t && event.type === TouchType.Down) {
       this.touchHand = t.windowX < this.halfWidthPx ? 'left' : 'right';
+      this.updateSide();
     }
   }
 
@@ -266,7 +274,7 @@ struct Index {
       Column() {
         Row() {
           Text(`motion: ${this.handLabel(this.motionHand)}`).fontSize(11).fontColor('#FFFFFF')
-          Text(`实际侧: ${this.effHand === 'left' ? '左' : '右'}`).fontSize(11).fontColor('#FFFFFF')
+          Text(`实际侧: ${this.buttonSide === 'left' ? '左' : '右'}`).fontSize(11).fontColor('#FFFFFF')
             .margin({ left: 10 })
           Text(this.gazeNative ? '注视:原生' : '注视:手动').fontSize(11).fontColor('#FFD60A')
             .margin({ left: 10 })
@@ -295,7 +303,7 @@ struct Index {
         .width('100%')
         .height('100%')
         .justifyContent(FlexAlign.Center)
-        .alignItems(this.effHand === 'left' ? HorizontalAlign.Start : HorizontalAlign.End)
+        .alignItems(this.buttonSide === 'left' ? HorizontalAlign.Start : HorizontalAlign.End)
         .padding({ left: 24, right: 24 })
         .hitTestBehavior(HitTestMode.Transparent)
       }
