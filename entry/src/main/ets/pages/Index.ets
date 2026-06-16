@@ -46,11 +46,6 @@ struct Index {
     return 'right';
   }
 
-  // 显示语音按钮：检测到握持手（左/右）即浮出；或处于注视态。
-  private get showVoiceButton(): boolean {
-    return this.lookingAtTop || this.motionHand === 'left' || this.motionHand === 'right';
-  }
-
   async aboutToAppear(): Promise<void> {
     // 关键：必须先 await 权限授予，再订阅 motion.on，否则订阅时权限未到位会失败(201)
     await this.requestPermissions();
@@ -286,7 +281,8 @@ struct Index {
       .margin({ top: 66, left: 16 })
 
       // ===== 握持手侧浮出的语音按钮 =====
-      if (this.showVoiceButton) {
+      // 注意：if 条件必须“直接读 @State”，不能用 getter，否则 ArkUI 不登记依赖、不会重渲。
+      if (this.lookingAtTop || this.motionHand === 'left' || this.motionHand === 'right') {
         Column() {
           VoiceButton({
             recording: this.recording,
