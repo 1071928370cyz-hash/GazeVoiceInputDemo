@@ -46,8 +46,9 @@ struct Index {
     return 'right';
   }
 
+  // 显示语音按钮：检测到握持手（左/右）即浮出；或处于注视态。
   private get showVoiceButton(): boolean {
-    return this.lookingAtTop;
+    return this.lookingAtTop || this.motionHand === 'left' || this.motionHand === 'right';
   }
 
   async aboutToAppear(): Promise<void> {
@@ -115,6 +116,7 @@ struct Index {
   private startVoice(): void {
     this.recording = true;
     this.zone = 'record';
+    this.gazeDetector.manualSetLooking(true); // 录音时展开输入框，便于看到实时转写文本
     if (this.collapseTimer !== -1) {
       clearTimeout(this.collapseTimer);
     }
