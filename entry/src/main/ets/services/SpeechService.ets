@@ -108,12 +108,19 @@ export class SpeechService {
     this.engine?.setListener(listener);
   }
 
-  /** 开始（单击触发）。会持续录音直到 finish()/cancel()。 */
-  start(cb: SpeechCallbacks): void {
-    if (!this.engine || this.listening) {
+  /** 开始（单击触发）。会持续录音直到 finish()/cancel()。引擎未就绪时懒加载。 */
+  async start(cb: SpeechCallbacks): Promise<void> {
+    this.cb = cb;
+    if (!this.engine) {
+      const ok = await this.init();
+      if (!ok) {
+        this.cb?.onError(-1, '语音引擎初始化失败');
+        return;
+      }
+    }
+    if (this.listening) {
       return;
     }
-    this.cb = cb;
     this.active = true;
     this.finalized = '';
     this.partial = '';
