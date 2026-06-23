@@ -1,21 +1,20 @@
 /**
- * SpeechService —— 语音录入 + 实时转写
+ * SpeechService —— 语音录入 + 实时转写（连续录音版）
  *
- * 基于 Core Speech Kit 的 speechRecognizer（端侧/离线 ASR）：
- *   import { speechRecognizer } from '@kit.CoreSpeechKit'
- *   speechRecognizer.createEngine(params)
- *   engine.setListener(listener)        // onResult 回传识别文本
- *   engine.startListening(startParams)  // recognitionMode=0 直接走麦克风实时录音识别
- *   engine.finish(sessionId) / cancel(sessionId) / shutdown()
- *   权限: ohos.permission.MICROPHONE
+ * 基于 Core Speech Kit 的 speechRecognizer（端侧/离线 ASR）。
  *
- * 用法贴合“长按说话、松手结束”：长按 -> start()，松手 -> finish()。
+ * 关键点（修复“录音中自己跳回未录音态”）：
+ *   speechRecognizer 默认会在静音(vadEnd)或达到 maxAudioDuration 时自动结束本次识别，
+ *   触发 onComplete。对“单击开始 / 单击结束”的交互来说，这会让按钮在你停顿时就自己结束。
+ *   所以这里：
+ *     1) 把 vadEnd 调到与 maxAudioDuration 同等大，避免停顿被判定为结束；
+ *     2) 用 active 标记“用户是否仍想录音”。引擎若在 active 期间自行结束，就自动续录，
+ *        并把已确定文本累计起来，直到用户调用 finish()/cancel()。
  */
 import { speechRecognizer } from '@kit.CoreSpeechKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 
 export interface SpeechCallbacks {
-  // 实时/最终识别文本（partial 会不断刷新，isLast=true 时为最终结果）
   onText: (text: string, isLast: boolean) => void;
   onError: (code: number, message: string) => void;
   onComplete?: () => void;
@@ -27,11 +26,16 @@ export class SpeechService {
   private cb?: SpeechCallbacks;
   private listening: boolean = false;
 
+  private active: boolean = false;       // 用户是否仍想录音
+  private finalized: string = '';        // 已确定的累计文本（跨子会话）
+  private partial: string = '';          // 当前子会话的临时文本
+  private restartCount: number = 0;      // 连续空续录计数，防止死循环
+  private readonly maxRestart: number = 4;
+
   get isListening(): boolean {
     return this.listening;
   }
 
-  /** 初始化引擎（建议在页面 aboutToAppear 里调用一次）。 */
   async init(): Promise<boolean> {
     if (this.engine) {
       return true;
@@ -39,7 +43,7 @@ export class SpeechService {
     const extraParams: Record<string, Object> = { 'locate': 'CN', 'recognizerMode': 'short' };
     const params: speechRecognizer.CreateEngineParams = {
       language: 'zh-CN',
-      online: 1, // 端侧（离线）识别，无需联网
+      online: 1,
       extraParams: extraParams
     };
     try {
@@ -62,28 +66,67 @@ export class SpeechService {
         console.info(`[SpeechService] onEvent code=${eventCode}`);
       },
       onResult: (sessionId: string, result: speechRecognizer.SpeechRecognitionResult): void => {
-        // result.result 为识别文本；result.isLast 为是否最终结果
-        this.cb?.onText(result.result, result.isLast);
+        this.partial = result.result;
+        if (this.partial.length > 0) {
+          this.restartCount = 0; // 有实际结果，重置续录计数
+        }
+        this.cb?.onText(this.finalized + this.partial, false);
+        if (result.isLast) {
+          this.finalized += this.partial;
+          this.partial = '';
+        }
       },
       onComplete: (sessionId: string, eventMessage: string): void => {
+        // 引擎结束了本次子会话。用户若仍想录音，则自动续录。
+        if (this.active) {
+          this.restartCount++;
+          if (this.restartCount <= this.maxRestart) {
+            this.beginSession();
+            return;
+          }
+          console.warn('[SpeechService] 连续续录超限，停止');
+          this.active = false;
+        }
         this.listening = false;
         this.cb?.onComplete?.();
       },
       onError: (sessionId: string, errorCode: number, errorMessage: string): void => {
-        this.listening = false;
         console.error(`[SpeechService] onError code=${errorCode} msg=${errorMessage}`);
+        // 续录期间的“无语音/超时”类错误也尝试续录，受 maxRestart 保护
+        if (this.active) {
+          this.restartCount++;
+          if (this.restartCount <= this.maxRestart) {
+            this.beginSession();
+            return;
+          }
+          this.active = false;
+        }
+        this.listening = false;
         this.cb?.onError(errorCode, errorMessage);
       }
     };
     this.engine?.setListener(listener);
   }
 
-  /** 开始录音识别（长按触发）。 */
+  /** 开始（单击触发）。会持续录音直到 finish()/cancel()。 */
   start(cb: SpeechCallbacks): void {
     if (!this.engine || this.listening) {
       return;
     }
     this.cb = cb;
+    this.active = true;
+    this.finalized = '';
+    this.partial = '';
+    this.restartCount = 0;
+    this.listening = true;
+    this.beginSession();
+  }
+
+  // 启动一段识别子会话。vadEnd 设大，避免停顿被判定为结束。
+  private beginSession(): void {
+    if (!this.engine) {
+      return;
+    }
     const audioInfo: speechRecognizer.AudioInfo = {
       audioType: 'pcm',
       sampleRate: 16000,
@@ -91,10 +134,10 @@ export class SpeechService {
       sampleBit: 16
     };
     const extraParams: Record<string, Object> = {
-      'recognitionMode': 0, // 0 = 麦克风实时录音识别
+      'recognitionMode': 0,
       'vadBegin': 2000,
-      'vadEnd': 3000,
-      'maxAudioDuration': 20000
+      'vadEnd': 60000,          // 静音容忍调到最大，停顿不再自动结束
+      'maxAudioDuration': 60000 // 端侧短语音上限
     };
     const startParams: speechRecognizer.StartParams = {
       sessionId: this.sessionId,
@@ -103,15 +146,17 @@ export class SpeechService {
     };
     try {
       this.engine.startListening(startParams);
-      this.listening = true;
     } catch (e) {
       const err = e as BusinessError;
+      this.active = false;
+      this.listening = false;
       this.cb?.onError(err.code, err.message);
     }
   }
 
-  /** 松手：正常结束本次识别，触发最终结果。 */
+  /** 单击结束：停止续录并结束识别，保留已转写文本。 */
   finish(): void {
+    this.active = false;
     if (!this.engine || !this.listening) {
       return;
     }
@@ -123,8 +168,11 @@ export class SpeechService {
     this.listening = false;
   }
 
-  /** 取消（丢弃本次结果）。 */
+  /** 取消：丢弃本次结果。 */
   cancel(): void {
+    this.active = false;
+    this.finalized = '';
+    this.partial = '';
     if (!this.engine || !this.listening) {
       return;
     }
@@ -136,7 +184,6 @@ export class SpeechService {
     this.listening = false;
   }
 
-  /** 释放引擎（页面销毁时调用）。 */
   release(): void {
     this.cancel();
     try {
