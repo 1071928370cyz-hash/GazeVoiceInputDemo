@@ -303,7 +303,8 @@ struct Index {
         .justifyContent(FlexAlign.Center)
         .alignItems(this.buttonSide === 'left' ? HorizontalAlign.Start : HorizontalAlign.End)
         .padding({ left: 24, right: 24 })
-        .hitTestBehavior(HitTestMode.Transparent)
+        // None：浮层自身不接收点击（空白处穿透到下面内容），但子按钮照常可点
+        .hitTestBehavior(HitTestMode.None)
       }
     }
     .width('100%')
