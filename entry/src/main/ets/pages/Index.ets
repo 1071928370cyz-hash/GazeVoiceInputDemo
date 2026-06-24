@@ -73,7 +73,7 @@ struct Index {
     });
     this.gazeNative = this.gazeDetector.usingNative;
 
-    this.speech.init();
+    await this.speech.init();
   }
 
   aboutToDisappear(): void {

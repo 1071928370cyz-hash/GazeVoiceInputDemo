@@ -140,11 +140,14 @@ export class SpeechService {
       soundChannel: 1,
       sampleBit: 16
     };
+    // 注意：vadEnd / maxAudioDuration 必须在引擎合法范围内（过大如 60000 会导致
+    // startListening 立即报错 -> 按钮“闪一下就弹回”）。这里用已验证可用的值；
+    // 停顿后引擎自动结束由 onComplete 里的“自动续录”兜住，实现连续录音。
     const extraParams: Record<string, Object> = {
       'recognitionMode': 0,
       'vadBegin': 2000,
-      'vadEnd': 60000,          // 静音容忍调到最大，停顿不再自动结束
-      'maxAudioDuration': 60000 // 端侧短语音上限
+      'vadEnd': 3000,
+      'maxAudioDuration': 20000
     };
     const startParams: speechRecognizer.StartParams = {
       sessionId: this.sessionId,
