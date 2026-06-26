@@ -11,9 +11,9 @@
 | 语音录入 + 实时转写 | Core Speech Kit · `speechRecognizer` | ✅ 原生，权限 `ohos.permission.MICROPHONE` |
 | 注视（是否看屏幕） | Swing 系统注视服务 `@ohos.swingability` · `EYE_GAZE_SCREEN_ON` | ✅ 事件驱动真眼动，权限 `ohos.permission.SUBSCRIBE_SWING_ABILITY`（需 swingability SDK + 可能系统签名）。见 `services/gaze/`；订阅失败自动回退「点击搜索框＝注视」手动兜底 |
 
-> ⚠️ 构建硬依赖：引入 `@ohos.swingability` 后整个工程**只能在装了该 SDK 的环境（公司 env）编译**，
-> 公开 SDK 的 DevEco 会编译失败。本机若要先跑通其余功能，临时把 `GazeDetector.ets` 对
-> `./gaze/SwingGaze` 的 import 注释、`start()` 里 `this.swing.start(sc)` 改为不调用即可回退纯手动。
+> 🔀 **注视后端有「一键开关」**：默认是**【关】=手动兜底**（本机就能编译安装，注视用「点搜索框=注视」代替）。
+> 到公司环境（有 Swing SDK）启用真注视，只改 2 处：`services/gaze/swing.ts`（注释切换）+ `module.json5`
+> （取消 `SUBSCRIBE_SWING_ABILITY` 注释）。详见根目录 **`切换注视开关.md`**。
 
 ## 交互流程
 

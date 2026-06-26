@@ -66,10 +66,12 @@
           ],
           "when": "inuse"
         }
-      },
-      {
-        "name": "ohos.permission.SUBSCRIBE_SWING_ABILITY"
       }
+      // 注视开关·第 2 步：公司环境启用 Swing 注视时，取消下面这一段的注释
+      // （本机/没有 Swing SDK 时保持注释，否则会因权限授不下来导致“安装失败”）：
+      // ,{
+      //   "name": "ohos.permission.SUBSCRIBE_SWING_ABILITY"
+      // }
     ]
   }
 }
