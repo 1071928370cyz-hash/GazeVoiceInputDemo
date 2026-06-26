@@ -159,6 +159,117 @@ struct Index {
     }
   }
 
+  // 语音输入后的检索结果（占位素材：视频 / 图片 / 文本）
+  @Builder
+  searchResults() {
+    Scroll() {
+      Column() {
+        // —— 视频 ——
+        this.sectionTitle('视频')
+        // 大视频卡
+        Stack({ alignContent: Alignment.BottomStart }) {
+          Column()
+            .width('100%')
+            .height(188)
+            .borderRadius(12)
+            .linearGradient({ angle: 135, colors: [['#3A6FF8', 0.0], ['#8AA9FF', 1.0]] })
+          // 播放按钮
+          Column() {
+            Text('▶').fontSize(20).fontColor('#FFFFFF')
+          }
+          .width(48).height(48).borderRadius(24)
+          .backgroundColor('#55000000')
+          .justifyContent(FlexAlign.Center)
+          .position({ x: '50%', y: '50%' })
+          .markAnchor({ x: 24, y: 24 })
+          // 标题条
+          Text(`${this.inputText} · 高清完整版`)
+            .fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .padding({ left: 12, bottom: 10, right: 12 })
+        }
+        .width('100%')
+        .margin({ left: 16, right: 16 })
+
+        // 两张小视频卡
+        Row({ space: 10 }) {
+          this.smallVideoCard('#FF7A45', '相关推荐 1')
+          this.smallVideoCard('#36CFC9', '相关推荐 2')
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16 })
+        .margin({ top: 10 })
+
+        // —— 图片 ——
+        this.sectionTitle('图片')
+        Scroll() {
+          Row({ space: 8 }) {
+            ForEach(['#FFD6A5', '#BDE0FE', '#CAFFBF', '#FFC6FF', '#A0C4FF'], (c: string) => {
+              Column()
+                .width(96).height(96).borderRadius(10).backgroundColor(c)
+            })
+          }
+          .padding({ left: 16, right: 16 })
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .width('100%')
+
+        // —— 相关 ——
+        this.sectionTitle('相关内容')
+        ForEach([1, 2, 3], (i: number) => {
+          Row() {
+            Column()
+              .width(64).height(64).borderRadius(8).backgroundColor('#EAECEF')
+            Column() {
+              Text(`${this.inputText}（结果 ${i}）`)
+                .fontSize(15).fontColor('#222222').maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text('为你找到的相关图文 · 点击查看')
+                .fontSize(12).fontColor('#999999').margin({ top: 6 })
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+            .margin({ left: 12 })
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+        })
+
+        Column().height(24)
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+    }
+    .layoutWeight(1)
+    .width('100%')
+    .margin({ top: 8 })
+    .align(Alignment.Top)
+  }
+
+  @Builder
+  sectionTitle(title: string) {
+    Text(title)
+      .fontSize(15).fontWeight(FontWeight.Bold).fontColor('#222222')
+      .margin({ left: 16, top: 14, bottom: 8 })
+  }
+
+  @Builder
+  smallVideoCard(color: string, label: string) {
+    Column() {
+      Stack({ alignContent: Alignment.Center }) {
+        Column().width('100%').height(96).borderRadius(10).backgroundColor(color)
+        Text('▶').fontSize(16).fontColor('#FFFFFF')
+      }
+      .width('100%')
+      Text(label)
+        .fontSize(13).fontColor('#333333').maxLines(1)
+        .margin({ top: 6 })
+        .alignSelf(ItemAlign.Start)
+    }
+    .layoutWeight(1)
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       // ===== 页面主体 =====
@@ -181,7 +292,7 @@ struct Index {
               .fillColor('#999999')
 
             if (!this.lookingAtTop) {
-              Text('点这里语音搜索')
+              Text('看这里语音搜索')
                 .fontSize(13)
                 .fontColor('#999999')
                 .margin({ left: 6 })
@@ -225,27 +336,7 @@ struct Index {
 
         // 内容区
         if (this.inputText.length > 0) {
-          // 搜索结果占位
-          Column() {
-            ForEach([1, 2, 3, 4], (i: number) => {
-              Row() {
-                Column()
-                  .width(48).height(64).borderRadius(6).backgroundColor('#EAECEF')
-                Column() {
-                  Text(`${this.inputText}`)
-                    .fontSize(15).fontColor('#222222').maxLines(1)
-                  Row().width('40%').height(11).borderRadius(4)
-                    .backgroundColor('#F0F1F3').margin({ top: 8 })
-                }
-                .alignItems(HorizontalAlign.Start)
-                .layoutWeight(1)
-                .margin({ left: 12 })
-              }
-              .width('100%').padding(12)
-            })
-          }
-          .margin({ top: 8 })
-          .layoutWeight(1)
+          this.searchResults()
         } else {
           // 首页内容占位
           Column() {
