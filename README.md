@@ -9,7 +9,11 @@
 | --- | --- | --- |
 | 握持手（智感握姿） | `@kit.MultimodalAwarenessKit` · `motion.on('holdingHandChanged')` | ✅ 原生，权限 `ohos.permission.DETECT_GESTURE`，需 HarmonyOS 6.0.0.115+ |
 | 语音录入 + 实时转写 | Core Speech Kit · `speechRecognizer` | ✅ 原生，权限 `ohos.permission.MICROPHONE` |
-| 注视（看屏幕上方输入框） | Multimodal Awareness Kit 注视能力 | ⚠️ 原生注视接口未核实，当前用「点击搜索框＝注视」手动兜底，见 `GazeDetector.ets` |
+| 注视（是否看屏幕） | Swing 系统注视服务 `@ohos.swingability` · `EYE_GAZE_SCREEN_ON` | ✅ 事件驱动真眼动，权限 `ohos.permission.SUBSCRIBE_SWING_ABILITY`（需 swingability SDK + 可能系统签名）。见 `services/gaze/`；订阅失败自动回退「点击搜索框＝注视」手动兜底 |
+
+> ⚠️ 构建硬依赖：引入 `@ohos.swingability` 后整个工程**只能在装了该 SDK 的环境（公司 env）编译**，
+> 公开 SDK 的 DevEco 会编译失败。本机若要先跑通其余功能，临时把 `GazeDetector.ets` 对
+> `./gaze/SwingGaze` 的 import 注释、`start()` 里 `this.swing.start(sc)` 改为不调用即可回退纯手动。
 
 ## 交互流程
 

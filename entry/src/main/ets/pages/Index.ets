@@ -26,6 +26,7 @@ struct Index {
   @State lookingAtTop: boolean = false;     // 是否处于“注视/激活搜索”状态
   @State recording: boolean = false;
   @State gazeNative: boolean = false;
+  @State gazeStatus: string = 'Swing 订阅中…';  // Swing 注视订阅诊断文本
   @State motionStatus: string = '初始化...';  // motion 诊断文本
   // 按钮所在侧（真正的 @State，供 UI 直接读，避免 getter 不触发重渲）
   @State buttonSide: 'left' | 'right' = 'right';
@@ -71,8 +72,10 @@ struct Index {
 
     this.gazeDetector.start((looking: boolean) => {
       this.lookingAtTop = looking;
+    }, (native: boolean, text: string) => {
+      this.gazeNative = native;
+      this.gazeStatus = text;
     });
-    this.gazeNative = this.gazeDetector.usingNative;
 
     await this.speech.init();
   }
@@ -372,10 +375,10 @@ struct Index {
           Text(`motion: ${this.handLabel(this.motionHand)}`).fontSize(11).fontColor('#FFFFFF')
           Text(`实际侧: ${this.buttonSide === 'left' ? '左' : '右'}`).fontSize(11).fontColor('#FFFFFF')
             .margin({ left: 10 })
-          Text(this.gazeNative ? '注视:原生' : '注视:手动').fontSize(11).fontColor('#FFD60A')
+          Text(this.gazeNative ? '注视:Swing' : '注视:手动').fontSize(11).fontColor('#FFD60A')
             .margin({ left: 10 })
         }
-        Text(`motion状态: ${this.motionStatus}`).fontSize(10).fontColor('#FFD60A')
+        Text(`motion: ${this.motionStatus}　gaze: ${this.gazeStatus}`).fontSize(10).fontColor('#FFD60A')
           .margin({ top: 2 })
       }
       .alignItems(HorizontalAlign.Start)

@@ -66,6 +66,9 @@
           ],
           "when": "inuse"
         }
+      },
+      {
+        "name": "ohos.permission.SUBSCRIBE_SWING_ABILITY"
       }
     ]
   }

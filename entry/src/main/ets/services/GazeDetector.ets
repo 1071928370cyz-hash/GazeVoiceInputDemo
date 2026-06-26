@@ -1,69 +1,77 @@
 /**
- * GazeDetector —— “用户是否注视屏幕上方输入框” 检测
+ * GazeDetector —— “用户是否注视屏幕” 检测（接入 Swing 系统注视服务）
  *
- * ⚠️ 重要说明（务必先读）：
- * HarmonyOS 的 Multimodal Awareness Kit 对外宣传了“注视(gaze)”能力（用于美颜相机
- * “看屏幕自动开美颜”，精度 ±2°），但截至目前，面向第三方应用、可在公开文档中
- * 核实签名的注视 ArkTS 接口我无法确认。公开已核实的多模态感知子模块是：
- *   - motion（动作感知 / 左右手，API 15）
- *   - stationary（设备静止）
- * 因此本文件用“能力探测 + try/catch”把原生注视包起来：
- *   1) 若你的设备/SDK 暴露了真实注视接口，请在 startNative() 里按真实签名补一行订阅；
- *   2) 任何失败都会自动回退到手动触发（fallback），保证实机一定能演示整条链路。
+ * 原生注视走华为 Swing 低功耗系统能力：@ohos.swingability 的 EYE_GAZE_SCREEN_ON 事件。
+ *   - eyeGaze: 1=正在看 / 0=没在看 / 2=无人脸；只有 1 算“在看”。
+ *   - 事件驱动、双向上报，看走/远离立刻报 0；低功耗、不取帧。
+ *   - 权限: ohos.permission.SUBSCRIBE_SWING_ABILITY（可能还需系统级签名）。
+ *   - 实现见 services/gaze/swing.ts（底层 .ts，勿改）与 services/gaze/SwingGaze.ets（薄封装）。
  *
- * 真实接口确认方式：在 DevEco Studio 里输入 `import { ` 后看 @kit.MultimodalAwarenessKit
- * 的自动补全，或查本地 SDK 的 d.ts；找到注视相关子模块（形如 gaze / userStatus）后，
- * 把它的 on('xxxChanged', cb) 填进下方 startNative() 即可，UI 层无需改动。
+ * ⚠️ 构建硬依赖：一旦引入 @ohos.swingability，整个工程只能在装了该 SDK 的环境（公司 env）编译；
+ *    公开 SDK 的 DevEco 会编译失败。订阅成功(code===0)后 nativeActive=true，由 Swing 驱动注视；
+ *    若订阅失败（缺权限/签名），自动回退到“手动兜底”（点击/聚焦顶部输入框视为注视），下游零感知。
  */
+import { SwingGaze, SwingCallbacks } from './gaze/SwingGaze';
 
 export type GazeListener = (lookingAtTop: boolean) => void;
+export type GazeStatusListener = (native: boolean, text: string) => void;
 
 export class GazeDetector {
   private callback?: GazeListener;
+  private statusCb?: GazeStatusListener;
   private nativeActive: boolean = false;
   private lastValue: boolean = false;
+  private swing: SwingGaze = new SwingGaze();
 
-  /** 是否成功启用了原生注视（false = 当前在用手动兜底） */
+  /** 是否已由 Swing 原生注视驱动（false = 当前在用手动兜底） */
   get usingNative(): boolean {
     return this.nativeActive;
   }
 
-  start(cb: GazeListener): void {
-    this.callback = cb;
-    this.nativeActive = this.startNative();
-    if (!this.nativeActive) {
-      console.warn('[GazeDetector] 原生注视不可用，已切换到手动兜底（点击输入框 = 注视）。');
-    }
-  }
-
   /**
-   * 尝试启用原生注视。返回是否成功。
-   *
-   * 下面是“占位实现”：以 motion 子模块同款风格写好骨架并做能力探测，
-   * 一旦确认真实子模块名与事件名，替换 import 与 on(...) 两行即可。
+   * 开始注视检测。
+   * @param cb       注视状态回调：true=在看屏幕
+   * @param statusCb 订阅状态回调（可选）：native 是否原生生效 + 诊断文本
    */
-  private startNative(): boolean {
+  start(cb: GazeListener, statusCb?: GazeStatusListener): void {
+    this.callback = cb;
+    this.statusCb = statusCb;
+    this.statusCb?.(false, 'Swing 订阅中…');
+
+    const sc: SwingCallbacks = {
+      onState: (code: number, msg: string): void => {
+        if (code === 0) {
+          this.nativeActive = true;
+          this.statusCb?.(true, 'Swing 订阅成功');
+        } else {
+          this.nativeActive = false;
+          console.warn(`[GazeDetector] Swing 订阅失败 ${code} ${msg}，回退手动兜底`);
+          this.statusCb?.(false, `Swing 失败(${code})·手动兜底`);
+        }
+      },
+      onRaw: (_dump: string): void => {
+        // 排错时可打印整个 EventData；正常不处理
+      },
+      onGaze: (eyeGaze: number, _raw: string): void => {
+        if (this.nativeActive) {
+          this.emit(eyeGaze === 1); // 只有 1 算在看；0/2 都按没看
+        }
+      }
+    };
+
     try {
-      // ——【替换点】真实注视接口确认后，按如下风格接入（示例，非已核实签名）——
-      //
-      //   import { gaze } from '@kit.MultimodalAwarenessKit';
-      //   gaze.on('gazeStateChanged', (state: gaze.GazeState) => {
-      //     this.emit(state === gaze.GazeState.LOOKING_AT_SCREEN);
-      //   });
-      //   return true;
-      //
-      // 在确认前，保持探测失败，走兜底，避免编译期引用不存在的符号。
-      return false;
+      this.swing.start(sc);
     } catch (e) {
-      console.error(`[GazeDetector] startNative 失败: ${JSON.stringify(e)}`);
-      return false;
+      this.nativeActive = false;
+      console.error(`[GazeDetector] Swing 启动异常: ${JSON.stringify(e)}`);
+      this.statusCb?.(false, 'Swing 启动异常·手动兜底');
     }
   }
 
-  /** 手动兜底触发：演示时由 UI 调用（如点击/聚焦顶部输入框视为“正在注视”）。 */
+  /** 手动兜底触发：Swing 未生效时由 UI 调用（点击/聚焦顶部输入框 = 注视）。 */
   manualSetLooking(looking: boolean): void {
     if (this.nativeActive) {
-      // 原生已生效时忽略手动信号，避免互相打架
+      // Swing 原生已生效时忽略手动信号，避免互相打架
       return;
     }
     this.emit(looking);
@@ -78,8 +86,13 @@ export class GazeDetector {
   }
 
   stop(): void {
-    // 原生接入后，在此 off 对应事件
+    try {
+      this.swing.stop();
+    } catch (e) {
+      console.warn(`[GazeDetector] Swing 停止异常: ${JSON.stringify(e)}`);
+    }
     this.nativeActive = false;
     this.callback = undefined;
+    this.statusCb = undefined;
   }
 }
