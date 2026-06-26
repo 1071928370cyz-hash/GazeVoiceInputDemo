@@ -15,10 +15,12 @@ import { SwingGaze, SwingCallbacks } from './gaze/SwingGaze';
 
 export type GazeListener = (lookingAtTop: boolean) => void;
 export type GazeStatusListener = (native: boolean, text: string) => void;
+export type GazeRawListener = (dump: string) => void;
 
 export class GazeDetector {
   private callback?: GazeListener;
   private statusCb?: GazeStatusListener;
+  private rawCb?: GazeRawListener;
   private nativeActive: boolean = false;
   private lastValue: boolean = false;
   private swing: SwingGaze = new SwingGaze();
@@ -33,9 +35,10 @@ export class GazeDetector {
    * @param cb       注视状态回调：true=在看屏幕
    * @param statusCb 订阅状态回调（可选）：native 是否原生生效 + 诊断文本
    */
-  start(cb: GazeListener, statusCb?: GazeStatusListener): void {
+  start(cb: GazeListener, statusCb?: GazeStatusListener, rawCb?: GazeRawListener): void {
     this.callback = cb;
     this.statusCb = statusCb;
+    this.rawCb = rawCb;
     this.statusCb?.(false, 'Swing 订阅中…');
 
     const sc: SwingCallbacks = {
@@ -49,8 +52,9 @@ export class GazeDetector {
           this.statusCb?.(false, `Swing 失败(${code})·手动兜底`);
         }
       },
-      onRaw: (_dump: string): void => {
-        // 排错时可打印整个 EventData；正常不处理
+      onRaw: (dump: string): void => {
+        // 把每次硬件回调的原始 EventData 抛到 UI，方便首次核对字段名/取值
+        this.rawCb?.(dump);
       },
       onGaze: (eyeGaze: number, _raw: string): void => {
         if (this.nativeActive) {
@@ -94,5 +98,6 @@ export class GazeDetector {
     this.nativeActive = false;
     this.callback = undefined;
     this.statusCb = undefined;
+    this.rawCb = undefined;
   }
 }

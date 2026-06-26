@@ -27,6 +27,7 @@ struct Index {
   @State recording: boolean = false;
   @State gazeNative: boolean = false;
   @State gazeStatus: string = 'Swing 订阅中…';  // Swing 注视订阅诊断文本
+  @State gazeRaw: string = '（暂无注视回调）';   // 最近一次 Swing 原始回调，首次核对字段名用
   @State motionStatus: string = '初始化...';  // motion 诊断文本
   // 按钮所在侧（真正的 @State，供 UI 直接读，避免 getter 不触发重渲）
   @State buttonSide: 'left' | 'right' = 'right';
@@ -75,6 +76,9 @@ struct Index {
     }, (native: boolean, text: string) => {
       this.gazeNative = native;
       this.gazeStatus = text;
+    }, (dump: string) => {
+      // 只留最后 120 个字符，避免太长撑爆状态条
+      this.gazeRaw = dump.length > 120 ? dump.slice(dump.length - 120) : dump;
     });
 
     await this.speech.init();
@@ -380,6 +384,10 @@ struct Index {
         }
         Text(`motion: ${this.motionStatus}　gaze: ${this.gazeStatus}`).fontSize(10).fontColor('#FFD60A')
           .margin({ top: 2 })
+        Text(`原始: ${this.gazeRaw}`).fontSize(9).fontColor('#9FE6A0')
+          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .margin({ top: 2 })
+          .constraintSize({ maxWidth: 300 })
       }
       .alignItems(HorizontalAlign.Start)
       .padding({ left: 10, right: 10, top: 4, bottom: 4 })
