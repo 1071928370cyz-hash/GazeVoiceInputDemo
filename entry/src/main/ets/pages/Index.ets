@@ -29,6 +29,7 @@ struct Index {
   @State motionStatus: string = '初始化...';  // motion 诊断文本
   // 按钮所在侧（真正的 @State，供 UI 直接读，避免 getter 不触发重渲）
   @State buttonSide: 'left' | 'right' = 'right';
+  @State showResults: boolean = false;      // 仅在点按结束后展示检索结果
 
   private handDetector = new HandDetector();
   private gazeDetector = new GazeDetector();
@@ -125,6 +126,7 @@ struct Index {
 
   private startVoice(): void {
     this.recording = true;
+    this.showResults = false; // 录音中先隐藏上一次的结果
     this.gazeDetector.manualSetLooking(true); // 录音时展开输入框，便于看到实时转写文本
     if (this.collapseTimer !== -1) {
       clearTimeout(this.collapseTimer);
@@ -147,6 +149,7 @@ struct Index {
   private stopVoice(): void {
     this.speech.finish();
     this.recording = false;
+    this.showResults = this.inputText.length > 0; // 讲完点按结束后才弹出结果
     this.resetCollapseTimer();
   }
 
@@ -314,6 +317,7 @@ struct Index {
                   .fillColor('#999999')
                   .onClick(() => {
                     this.inputText = '';
+                    this.showResults = false;
                   })
               }
             }
@@ -335,7 +339,7 @@ struct Index {
         .margin({ top: 10 })
 
         // 内容区
-        if (this.inputText.length > 0) {
+        if (this.showResults && this.inputText.length > 0) {
           this.searchResults()
         } else {
           // 首页内容占位
